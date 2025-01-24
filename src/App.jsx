@@ -7,6 +7,7 @@ import Categories from './pages/Categories';
 import Products from './pages/Products';
 import Sellers from './pages/Sellers';
 import Statistics from './pages/Statistics';
+import Orders from './pages/Orders';
 import { Snackbar, Alert } from '@mui/material';
 import { io } from 'socket.io-client';
 
@@ -17,11 +18,13 @@ function App() {
     severity: 'info'
   });
 
-  const socket = useMemo(() => io('https://winstrikebackend.mixmall.uz', {
-    transports: ['polling'],
+  const socket = useMemo(() => io('http://localhost:5000', {
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
+    secure: true,
+    rejectUnauthorized: false,
     auth: {
       token: () => localStorage.getItem('token')
     }
@@ -182,6 +185,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Statistics />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <PrivateRoute>
+                <Orders />
               </PrivateRoute>
             }
           />

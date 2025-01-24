@@ -1,12 +1,14 @@
 import { io } from 'socket.io-client';
 
-const BACKEND_URL = 'https://winstrikebackend.mixmall.uz';
+const BACKEND_URL = 'http://localhost:5000';
 
 const socket = io(BACKEND_URL, {
-    transports: ['polling'],  // Faqat polling ishlatamiz
+    transports: ['websocket', 'polling'],
     reconnection: true,
     reconnectionAttempts: 5,
     reconnectionDelay: 1000,
+    secure: false,
+    rejectUnauthorized: false,
     auth: {
       token: () => localStorage.getItem('token')
     }

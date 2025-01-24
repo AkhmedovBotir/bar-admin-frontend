@@ -24,7 +24,8 @@ import {
   Tabs,
   Tab,
   Avatar,
-  DialogContentText
+  DialogContentText,
+  MenuItem
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -36,7 +37,7 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
-import axios from 'axios';
+import axiosInstance from '../utils/axios';
 import socket from '../utils/socket';
 
 const Sellers = () => {
@@ -53,7 +54,8 @@ const Sellers = () => {
     name: '',
     username: '',
     password: '',
-    newPassword: ''
+    newPassword: '',
+    status: 'active'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -69,12 +71,7 @@ const Sellers = () => {
 
   const fetchSellers = async () => {
     try {
-      const response = await axios.get('https://winstrikebackend.mixmall.uz/api/sellers', {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      const response = await axiosInstance.get('/api/seller');
       setSellers(response.data);
     } catch (err) {
       console.error('Sotuvchilarni yuklashda xatolik:', err);
@@ -100,7 +97,8 @@ const Sellers = () => {
         name: seller.name,
         username: seller.username,
         password: '',
-        newPassword: ''
+        newPassword: '',
+        status: seller.status || 'active'
       });
     } else {
       setSelectedSeller(null);
@@ -108,7 +106,8 @@ const Sellers = () => {
         name: '',
         username: '',
         password: '',
-        newPassword: ''
+        newPassword: '',
+        status: 'active'
       });
     }
     setDialogTab(0);
@@ -122,127 +121,81 @@ const Sellers = () => {
       name: '',
       username: '',
       password: '',
-      newPassword: ''
+      newPassword: '',
+      status: 'active'
     });
     setDialogTab(0);
-  };
-
-  const updateSellerInfo = async () => {
-    await axios.patch(
-      `https://winstrikebackend.mixmall.uz/api/sellers/${selectedSeller._id}`,
-      {
-        name: formData.name,
-        username: formData.username
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      }
-    );
-  };
-
-  const validatePassword = (password) => {
-    if (password.length < 6) {
-      throw new Error('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
-    }
-    return true;
-  };
-
-  const updateSellerPassword = async () => {
-    try {
-      // Parolni tekshirish
-      validatePassword(formData.newPassword);
-
-      const response = await axios.patch(
-        `https://winstrikebackend.mixmall.uz/api/sellers/${selectedSeller._id}/password`,
-        {
-          newPassword: formData.newPassword
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
-      );
-
-      // WebSocket orqali xabar yuborish
-      socket.emit('sellerPasswordUpdated', { 
-        id: selectedSeller._id 
-      });
-
-      return response.data;
-    } catch (err) {
-      if (err.response?.status === 404) {
-        throw new Error('Sotuvchi topilmadi');
-      }
-      throw err;
-    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       if (selectedSeller) {
-        // Ma'lumotlarni yangilash
-        await updateSellerInfo();
+        if (dialogTab === 0) {
+          // Asosiy ma'lumotlarni yangilash
+          const response = await axiosInstance.patch(
+            `/api/seller/${selectedSeller._id}`,
+            {
+              name: formData.name,
+              username: formData.username,
+              status: formData.status
+            }
+          );
 
-        // Agar yangi parol kiritilgan bo'lsa
-        if (formData.newPassword) {
-          try {
-            await updateSellerPassword();
+          if (response.data.success) {
             setSnackbar({
               open: true,
-              message: 'Sotuvchi paroli muvaffaqiyatli yangilandi',
+              message: 'Sotuvchi ma\'lumotlari yangilandi',
               severity: 'success'
             });
-          } catch (err) {
-            setSnackbar({
-              open: true,
-              message: err.message || 'Parolni yangilashda xatolik yuz berdi',
-              severity: 'error'
-            });
-            return;
+          }
+        } else {
+          // Parolni yangilash
+          if (formData.newPassword) {
+            validatePassword(formData.newPassword);
+            const response = await axiosInstance.patch(
+              `/api/seller/${selectedSeller._id}`,
+              {
+                password: formData.newPassword
+              }
+            );
+
+            if (response.data.success) {
+              setSnackbar({
+                open: true,
+                message: 'Parol muvaffaqiyatli yangilandi',
+                severity: 'success'
+              });
+            }
           }
         }
-
-        setSnackbar({
-          open: true,
-          message: 'Sotuvchi muvaffaqiyatli yangilandi',
-          severity: 'success'
-        });
       } else {
         // Yangi sotuvchi qo'shish
-        if (formData.password) {
-          validatePassword(formData.password);
+        if (!formData.password) {
+          throw new Error('Parol kiritish majburiy');
         }
+        validatePassword(formData.password);
 
-        await axios.post(
-          'https://winstrikebackend.mixmall.uz/api/sellers',
+        const response = await axiosInstance.post(
+          '/api/seller',
           {
             name: formData.name,
             username: formData.username,
             password: formData.password
-          },
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
           }
         );
 
-        setSnackbar({
-          open: true,
-          message: 'Sotuvchi muvaffaqiyatli qo\'shildi',
-          severity: 'success'
-        });
+        if (response.data.success) {
+          setSnackbar({
+            open: true,
+            message: 'Sotuvchi muvaffaqiyatli qo\'shildi',
+            severity: 'success'
+          });
+        }
       }
 
       // Sotuvchilar ro'yxatini yangilash
-      fetchSellers();
+      await fetchSellers();
       
       // Socket orqali xabar yuborish
       socket.emit(selectedSeller ? 'sellerUpdated' : 'sellerCreated', { 
@@ -253,12 +206,38 @@ const Sellers = () => {
       handleClose();
       
     } catch (err) {
-      console.error('Error:', err.response || err);
+      console.error('Error:', err);
+      let errorMessage = 'Xatolik yuz berdi';
+      
+      if (err.response) {
+        switch (err.response.status) {
+          case 400:
+            errorMessage = err.response.data.message || 'Noto\'g\'ri ma\'lumotlar kiritildi';
+            break;
+          case 401:
+            errorMessage = 'Sizda bu amalni bajarish uchun huquq yo\'q';
+            break;
+          case 404:
+            errorMessage = 'Sotuvchi topilmadi';
+            break;
+          default:
+            errorMessage = err.response.data.message || 'Serverda xatolik yuz berdi';
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
       setSnackbar({
         open: true,
-        message: err.response?.data?.message || err.message || 'Xatolik yuz berdi',
+        message: errorMessage,
         severity: 'error'
       });
+    }
+  };
+
+  const validatePassword = (password) => {
+    if (!password || password.length < 6) {
+      throw new Error('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
     }
   };
 
@@ -278,12 +257,7 @@ const Sellers = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      await axios.delete(`https://winstrikebackend.mixmall.uz/api/sellers/${deleteDialog.seller._id}`, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      await axiosInstance.delete(`/api/seller/${deleteDialog.seller._id}`);
       
       setSnackbar({
         open: true,
@@ -402,11 +376,11 @@ const Sellers = () => {
                     <TableCell>{seller.username}</TableCell>
                     <TableCell>
                       <Chip 
-                        label="Faol" 
+                        label={seller.status === 'active' ? 'Faol' : 'Nofaol'} 
                         size="small"
                         sx={{ 
-                          bgcolor: 'success.light',
-                          color: 'success.main',
+                          bgcolor: seller.status === 'active' ? 'success.light' : 'error.light',
+                          color: seller.status === 'active' ? 'success.main' : 'error.main',
                           fontWeight: 500
                         }} 
                       />
@@ -482,69 +456,88 @@ const Sellers = () => {
             onSubmit={handleSubmit}
             sx={{ mt: 2 }}
           >
-            <TextField
-              fullWidth
-              label="Ism"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Username"
-              name="username"
-              value={formData.username}
-              onChange={handleChange}
-              sx={{ mb: 2 }}
-            />
-            {selectedSeller ? (
-              <TextField
-                fullWidth
-                label="Yangi parol"
-                name="newPassword"
-                type={showNewPassword ? 'text' : 'password'}
-                value={formData.newPassword}
-                onChange={handleChange}
-                helperText="Parol kamida 6 ta belgidan iborat bo'lishi kerak"
-                error={formData.newPassword ? formData.newPassword.length < 6 : false}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        edge="end"
-                      >
-                        {showNewPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-              />
-            ) : (
-              <TextField
-                fullWidth
-                label="Parol"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                value={formData.password}
-                onChange={handleChange}
-                required={!selectedSeller}
-                helperText="Parol kamida 6 ta belgidan iborat bo'lishi kerak"
-                error={formData.password ? formData.password.length < 6 : false}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-              />
+            <Box sx={{ width: '100%', mt: 2 }}>
+              <Tabs value={dialogTab} onChange={(e, newValue) => setDialogTab(newValue)}>
+                <Tab label="Asosiy ma'lumotlar" />
+                {selectedSeller && <Tab label="Parolni o'zgartirish" />}
+              </Tabs>
+            </Box>
+
+            {dialogTab === 0 && (
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  label="Ism"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label="Username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  sx={{ mb: 2 }}
+                />
+                {!selectedSeller && (
+                  <TextField
+                    fullWidth
+                    type={showPassword ? 'text' : 'password'}
+                    label="Parol"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowPassword(!showPassword)}>
+                            {showPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                          </IconButton>
+                        </InputAdornment>
+                      )
+                    }}
+                  />
+                )}
+                {selectedSeller && (
+                  <TextField
+                    select
+                    fullWidth
+                    label="Status"
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    sx={{ mb: 2 }}
+                  >
+                    <MenuItem value="active">Faol</MenuItem>
+                    <MenuItem value="inactive">Nofaol</MenuItem>
+                  </TextField>
+                )}
+              </Box>
+            )}
+            {dialogTab === 1 && selectedSeller && (
+              <Box sx={{ mt: 2 }}>
+                <TextField
+                  fullWidth
+                  type={showNewPassword ? 'text' : 'password'}
+                  label="Yangi parol"
+                  name="newPassword"
+                  value={formData.newPassword}
+                  onChange={handleChange}
+                  helperText="Parol kamida 6 ta belgidan iborat bo'lishi kerak"
+                  error={formData.newPassword ? formData.newPassword.length < 6 : false}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={() => setShowNewPassword(!showNewPassword)}>
+                          {showNewPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      </InputAdornment>
+                    )
+                  }}
+                />
+              </Box>
             )}
           </Box>
         </DialogContent>

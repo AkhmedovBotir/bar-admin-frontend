@@ -34,7 +34,10 @@ import {
   ChevronLeft as ChevronLeftIcon,
   AccountCircle,
   Home as HomeIcon,
-  Logout as LogoutIcon
+  Logout as LogoutIcon,
+  Group as GroupIcon,
+  BarChart as BarChartIcon,
+  Receipt as ReceiptIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 
@@ -55,10 +58,11 @@ const Layout = ({ children }) => {
 
   const menuItems = [
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
-    { text: 'Sotuvchilar', icon: <PeopleIcon />, path: '/sellers' },
+    { text: 'Sotuvchilar', icon: <GroupIcon />, path: '/sellers' },
     { text: 'Kategoriyalar', icon: <CategoryIcon />, path: '/categories' },
     { text: 'Mahsulotlar', icon: <InventoryIcon />, path: '/products' },
-    { text: 'Statistika', icon: <TrendingUpIcon />, path: '/statistics' }
+    { text: 'Statistika', icon: <BarChartIcon />, path: '/statistics' },
+    { text: 'Buyurtmalar', icon: <ReceiptIcon />, path: '/orders' },
   ];
 
   const handleLogout = () => {
@@ -84,7 +88,7 @@ const Layout = ({ children }) => {
   const handlePasswordChange = async () => {
     try {
       await axios.patch(
-        'https://winstrikebackend.mixmall.uz/api/admin/password',
+        'http://localhost:5000/api/admin/password',
         passwordData,
         {
           headers: {
@@ -107,7 +111,15 @@ const Layout = ({ children }) => {
     setAnchorEl(null);
   };
 
-  const adminData = JSON.parse(localStorage.getItem('adminData') || '{}');
+  const adminData = (() => {
+    try {
+      const data = localStorage.getItem('adminData');
+      return data ? JSON.parse(data) : {};
+    } catch (error) {
+      console.error('Error parsing adminData:', error);
+      return {};
+    }
+  })();
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: '#f5f5f5' }}>

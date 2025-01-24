@@ -32,7 +32,7 @@ const Dashboard = () => {
 
   const fetchTopProducts = async () => {
     try {
-      const response = await axios.get('https://winstrikebackend.mixmall.uz/api/products/top', {
+      const response = await axios.get('http://localhost:5000/api/product/top', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -45,7 +45,7 @@ const Dashboard = () => {
 
   const fetchTopSellers = async () => {
     try {
-      const response = await axios.get('https://winstrikebackend.mixmall.uz/api/sellers/top', {
+      const response = await axios.get('http://localhost:5000/api/seller/top', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }

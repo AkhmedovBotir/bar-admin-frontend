@@ -70,7 +70,7 @@ function Categories() {
   // Kategoriyalarni yuklash
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('https://winstrikebackend.mixmall.uz/api/categories', {
+      const response = await axios.get('http://localhost:5000/api/category', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -200,7 +200,7 @@ function Categories() {
         // Kategoriyani yangilash
         if (selectedSubcategory) {
           await axios.patch(
-            `https://winstrikebackend.mixmall.uz/api/categories/${selectedCategory._id}/subcategories/${selectedSubcategory._id}`,
+            `http://localhost:5000/api/category/${selectedCategory._id}/subcategories/${selectedSubcategory._id}`,
             formData,
             {
               headers: {
@@ -220,7 +220,7 @@ function Categories() {
           });
         } else {
           await axios.patch(
-            `https://winstrikebackend.mixmall.uz/api/categories/${selectedCategory._id}`,
+            `http://localhost:5000/api/category/${selectedCategory._id}`,
             formData,
             {
               headers: {
@@ -242,7 +242,7 @@ function Categories() {
       } else {
         // Yangi kategoriya qo'shish
         await axios.post(
-          'https://winstrikebackend.mixmall.uz/api/categories',
+          'http://localhost:5000/api/category',
           formData,
           {
             headers: {
@@ -308,7 +308,7 @@ function Categories() {
 
     try {
       await axios.post(
-        `https://winstrikebackend.mixmall.uz/api/categories/${selectedCategory._id}/subcategories`,
+        `http://localhost:5000/api/category/${selectedCategory._id}/subcategories`,
         { name: formData.name },
         {
           headers: {
@@ -364,7 +364,7 @@ function Categories() {
     try {
       if (subcategory) {
         await axios.delete(
-          `https://winstrikebackend.mixmall.uz/api/categories/${category._id}/subcategories/${subcategory._id}`,
+          `http://localhost:5000/api/category/${category._id}/subcategories/${subcategory._id}`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`
@@ -382,7 +382,7 @@ function Categories() {
         });
       } else {
         await axios.delete(
-          `https://winstrikebackend.mixmall.uz/api/categories/${category._id}`,
+          `http://localhost:5000/api/category/${category._id}`,
           {
             headers: {
               Authorization: `Bearer ${localStorage.getItem('token')}`
