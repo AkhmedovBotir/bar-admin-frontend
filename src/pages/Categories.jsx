@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/axios';
 import socket from '../utils/socket';
 import {
   Box,
@@ -30,7 +30,8 @@ import {
   Chip,
   Tooltip,
   InputAdornment,
-  useTheme
+  useTheme,
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -51,7 +52,9 @@ function Categories() {
   const [openSubDialog, setOpenSubDialog] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [formData, setFormData] = useState({
-    name: ''
+    name: '',
+    description: '',
+    image: ''
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -61,6 +64,7 @@ function Categories() {
   const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [loading, setLoading] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     category: null,
@@ -70,19 +74,18 @@ function Categories() {
   // Kategoriyalarni yuklash
   const fetchCategories = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/category', {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        }
-      });
+      setLoading(true);
+      const response = await api.get('/api/category');
       setCategories(response.data);
     } catch (err) {
       console.error('Error fetching categories:', err);
       setSnackbar({
         open: true,
-        message: 'Kategoriyalarni yuklashda xatolik yuz berdi',
+        message: err.response?.data?.message || 'Kategoriyalarni yuklashda xatolik yuz berdi',
         severity: 'error'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -108,7 +111,7 @@ function Categories() {
       });
     });
 
-    socket.on('category_deleted', ({ categoryId }) => {
+    socket.on('category_deleted', (categoryId) => {
       setCategories(prev => prev.filter(cat => cat._id !== categoryId));
       setSnackbar({
         open: true,
@@ -185,6 +188,7 @@ function Categories() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
 
     if (!formData.name.trim()) {
       setSnackbar({
@@ -199,98 +203,67 @@ function Categories() {
       if (selectedCategory) {
         // Kategoriyani yangilash
         if (selectedSubcategory) {
-          await axios.patch(
-            `http://localhost:5000/api/category/${selectedCategory._id}/subcategories/${selectedSubcategory._id}`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              }
+          // Subcategory yangilash
+          const response = await api.put(
+            `/api/category/subcategories/${selectedSubcategory._id}`,
+            { 
+              name: formData.name,
+              description: formData.description || ""
             }
           );
 
-          // Kategoriyalar ro'yxatini yangilash
-          fetchCategories();
-
-          setSnackbar({
-            open: true,
-            message: 'Subkategoriya muvaffaqiyatli yangilandi',
-            severity: 'success'
-          });
+          if (response.data.success) {
+            fetchCategories();
+            setSnackbar({
+              open: true,
+              message: response.data.message || 'Subkategoriya muvaffaqiyatli yangilandi',
+              severity: 'success'
+            });
+            handleClose();
+          }
         } else {
-          await axios.patch(
-            `http://localhost:5000/api/category/${selectedCategory._id}`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${localStorage.getItem('token')}`
-              }
+          // Kategoriyani yangilash
+          const response = await api.put(
+            `/api/category/${selectedCategory._id}`,
+            { 
+              name: formData.name,
+              image: formData.image
             }
           );
 
-          // Kategoriyalar ro'yxatini yangilash
-          fetchCategories();
-
-          setSnackbar({
-            open: true,
-            message: 'Kategoriya muvaffaqiyatli yangilandi',
-            severity: 'success'
-          });
+          if (response.data.success) {
+            fetchCategories();
+            setSnackbar({
+              open: true,
+              message: response.data.message || 'Kategoriya muvaffaqiyatli yangilandi',
+              severity: 'success'
+            });
+            handleClose();
+          }
         }
       } else {
         // Yangi kategoriya qo'shish
-        await axios.post(
-          'http://localhost:5000/api/category',
-          formData,
-          {
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          }
-        );
+        const response = await api.post('/api/category', formData);
 
-        // Kategoriyalar ro'yxatini yangilash
-        fetchCategories();
-
-        setSnackbar({
-          open: true,
-          message: 'Kategoriya muvaffaqiyatli qo\'shildi',
-          severity: 'success'
-        });
+        if (response.data.success) {
+          fetchCategories();
+          setSnackbar({
+            open: true,
+            message: response.data.message || 'Kategoriya muvaffaqiyatli qo\'shildi',
+            severity: 'success'
+          });
+          handleClose();
+        }
       }
-
-      handleClose();
     } catch (err) {
-      // WebSocket xatoligini tekshirish
-      if (err.response?.data?.message?.includes('wsHandlers')) {
-        // WebSocket xatoligini e'tiborsiz qoldirish, chunki ma'lumotlar saqlangan
-        fetchCategories();
-        setSnackbar({
-          open: true,
-          message: selectedCategory 
-            ? selectedSubcategory
-              ? 'Subkategoriya muvaffaqiyatli yangilandi'
-              : 'Kategoriya muvaffaqiyatli yangilandi'
-            : 'Kategoriya muvaffaqiyatli qo\'shildi',
-          severity: 'success'
-        });
-        handleClose();
-      } else {
-        // Boshqa xatoliklar uchun
-        console.error('Error submitting:', err);
-        setSnackbar({
-          open: true,
-          message: selectedCategory 
-            ? selectedSubcategory
-              ? 'Subkategoriyani yangilashda xatolik yuz berdi'
-              : 'Kategoriyani yangilashda xatolik yuz berdi'
-            : 'Kategoriya qo\'shishda xatolik yuz berdi',
-          severity: 'error'
-        });
-      }
+      console.error('Error submitting:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Xatolik yuz berdi',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -307,18 +280,11 @@ function Categories() {
     }
 
     try {
-      await axios.post(
-        `http://localhost:5000/api/category/${selectedCategory._id}/subcategories`,
-        { name: formData.name },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('token')}`
-          }
-        }
+      await api.post(
+        `/api/category/${selectedCategory._id}/subcategories`,
+        { name: formData.name }
       );
 
-      // Kategoriyalar ro'yxatini yangilash
       fetchCategories();
 
       setSnackbar({
@@ -329,25 +295,12 @@ function Categories() {
 
       handleClose();
     } catch (err) {
-      // WebSocket xatoligini tekshirish
-      if (err.response?.data?.message?.includes('wsHandlers')) {
-        // WebSocket xatoligini e'tiborsiz qoldirish, chunki ma'lumotlar saqlangan
-        fetchCategories();
-        setSnackbar({
-          open: true,
-          message: 'Subkategoriya muvaffaqiyatli qo\'shildi',
-          severity: 'success'
-        });
-        handleClose();
-      } else {
-        // Boshqa xatoliklar uchun
-        console.error('Error adding subcategory:', err);
-        setSnackbar({
-          open: true,
-          message: 'Subkategoriya qo\'shishda xatolik yuz berdi',
-          severity: 'error'
-        });
-      }
+      console.error('Error adding subcategory:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Subkategoriya qo\'shishda xatolik yuz berdi',
+        severity: 'error'
+      });
     }
   };
 
@@ -363,16 +316,10 @@ function Categories() {
     const { category, subcategory } = deleteDialog;
     try {
       if (subcategory) {
-        await axios.delete(
-          `http://localhost:5000/api/category/${category._id}/subcategories/${subcategory._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          }
+        await api.delete(
+          `/api/category/${category._id}/subcategories/${subcategory._id}`
         );
         
-        // Kategoriyalar ro'yxatini yangilash
         fetchCategories();
 
         setSnackbar({
@@ -381,16 +328,10 @@ function Categories() {
           severity: 'success'
         });
       } else {
-        await axios.delete(
-          `http://localhost:5000/api/category/${category._id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`
-            }
-          }
+        await api.delete(
+          `/api/category/${category._id}`
         );
 
-        // Kategoriyalar ro'yxatini yangilash
         fetchCategories();
 
         setSnackbar({
@@ -400,28 +341,12 @@ function Categories() {
         });
       }
     } catch (err) {
-      // WebSocket xatoligini tekshirish
-      if (err.response?.data?.message?.includes('wsHandlers')) {
-        // WebSocket xatoligini e'tiborsiz qoldirish, chunki ma'lumotlar o'chirilgan
-        fetchCategories();
-        setSnackbar({
-          open: true,
-          message: subcategory 
-            ? 'Subkategoriya muvaffaqiyatli o\'chirildi'
-            : 'Kategoriya muvaffaqiyatli o\'chirildi',
-          severity: 'success'
-        });
-      } else {
-        // Boshqa xatoliklar uchun
-        console.error('Error deleting:', err);
-        setSnackbar({
-          open: true,
-          message: subcategory 
-            ? 'Subkategoriyani o\'chirishda xatolik yuz berdi'
-            : 'Kategoriyani o\'chirishda xatolik yuz berdi',
-          severity: 'error'
-        });
-      }
+      console.error('Error deleting:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Xatolik yuz berdi',
+        severity: 'error'
+      });
     } finally {
       setDeleteDialog({
         open: false,
@@ -447,7 +372,7 @@ function Categories() {
     } else if (openSubDialog) {
       setOpenSubDialog(false);
     }
-    setFormData({ name: '' });
+    setFormData({ name: '', description: '', image: '' });
   };
 
   const handleAddSubcategory = (category) => {
@@ -461,7 +386,7 @@ function Categories() {
       return;
     }
     setSelectedCategory(category);
-    setFormData({ name: '' });
+    setFormData({ name: '', description: '', image: '' });
     setOpenSubDialog(true);
   };
 
@@ -469,7 +394,9 @@ function Categories() {
     setSelectedCategory(category);
     setSelectedSubcategory(subcategory);
     setFormData({
-      name: subcategory ? subcategory.name : category.name
+      name: subcategory ? subcategory.name : category.name,
+      description: subcategory ? subcategory.description : '',
+      image: category.image
     });
     setOpenDialog(true);
   };
@@ -630,130 +557,102 @@ function Categories() {
       <Dialog 
         open={openDialog} 
         onClose={handleClose}
-        PaperProps={{
-          sx: { borderRadius: '12px' }
-        }}
+        maxWidth="sm"
+        fullWidth
       >
-        <DialogTitle sx={{ 
-          p: 2.5,
-          fontSize: '1.25rem',
-          fontWeight: 500
-        }}>
-          {selectedCategory
+        <DialogTitle>
+          {selectedCategory 
             ? selectedSubcategory
               ? 'Subkategoriyani tahrirlash'
               : 'Kategoriyani tahrirlash'
-            : 'Yangi kategoriya'}
+            : 'Yangi kategoriya qo\'shish'
+          }
         </DialogTitle>
-        <form onSubmit={handleSubmit}>
-          <DialogContent sx={{ 
-            px: 2.5,
-            py: 0.5,
-            minWidth: 400
-          }}>
+        <DialogContent>
+          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             <TextField
               autoFocus
-              fullWidth
-              label="Nomi"
+              margin="dense"
               name="name"
+              label="Nomi"
+              type="text"
+              fullWidth
+              variant="outlined"
               value={formData.name}
               onChange={handleChange}
-              margin="normal"
               required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px'
-                }
-              }}
             />
-          </DialogContent>
-          <DialogActions sx={{ p: 2.5 }}>
-            <Button 
-              onClick={handleClose}
-              sx={{ 
-                borderRadius: '8px',
-                textTransform: 'none',
-                px: 3
-              }}
-            >
-              Bekor qilish
-            </Button>
-            <Button 
-              type="submit" 
-              variant="contained" 
-              sx={{ 
-                borderRadius: '8px',
-                textTransform: 'none',
-                px: 3
-              }}
-            >
-              {selectedCategory ? 'Saqlash' : 'Qo\'shish'}
-            </Button>
-          </DialogActions>
-        </form>
+            {selectedCategory && !selectedSubcategory && (
+              <TextField
+                margin="dense"
+                name="image"
+                label="Rasmi"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={formData.image}
+                onChange={handleChange}
+              />
+            )}
+            {selectedSubcategory && (
+              <TextField
+                margin="dense"
+                name="description"
+                label="Tavsifi"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={formData.description}
+                onChange={handleChange}
+              />
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Bekor qilish</Button>
+          <Button onClick={handleSubmit} variant="contained" color="primary">
+            {selectedCategory 
+              ? selectedSubcategory
+                ? 'Saqlash'
+                : 'Yangilash'
+              : 'Qo\'shish'
+            }
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Yangi Subkategoriya Dialog */}
       <Dialog 
         open={openSubDialog} 
         onClose={handleClose}
-        PaperProps={{
-          sx: { borderRadius: '12px' }
-        }}
+        maxWidth="sm"
+        fullWidth
       >
-        <DialogTitle sx={{ 
-          p: 2.5,
-          fontSize: '1.25rem',
-          fontWeight: 500
-        }}>
+        <DialogTitle>
           Yangi subkategoriya
         </DialogTitle>
-        <form onSubmit={handleSubcategorySubmit}>
-          <DialogContent sx={{ 
-            px: 2.5,
-            py: 0.5,
-            minWidth: 400
-          }}>
+        <DialogContent>
+          <Box component="form" onSubmit={handleSubcategorySubmit} sx={{ mt: 2 }}>
             <TextField
               autoFocus
-              fullWidth
-              label="Nomi"
+              margin="dense"
               name="name"
+              label="Nomi"
+              type="text"
+              fullWidth
+              variant="outlined"
               value={formData.name}
               onChange={handleChange}
-              margin="normal"
               required
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '8px'
-                }
-              }}
             />
-          </DialogContent>
-          <DialogActions sx={{ p: 2.5 }}>
-            <Button 
-              onClick={handleClose}
-              sx={{ 
-                borderRadius: '8px',
-                textTransform: 'none',
-                px: 3
-              }}
-            >
-              Bekor qilish
-            </Button>
-            <Button 
-              type="submit" 
-              variant="contained"
-              sx={{ 
-                borderRadius: '8px',
-                textTransform: 'none',
-                px: 3
-              }}
-            >
-              Qo'shish
-            </Button>
-          </DialogActions>
-        </form>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose}>Bekor qilish</Button>
+          <Button onClick={handleSubcategorySubmit} variant="contained" color="primary">
+            Qo'shish
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* O'chirish tasdiqlash dialogi */}

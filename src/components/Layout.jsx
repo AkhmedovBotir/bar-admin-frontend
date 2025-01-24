@@ -88,7 +88,7 @@ const Layout = ({ children }) => {
   const handlePasswordChange = async () => {
     try {
       await axios.patch(
-        'http://localhost:5000/api/admin/password',
+        'https://barback.mixmall.uz/api/admin/password',
         passwordData,
         {
           headers: {

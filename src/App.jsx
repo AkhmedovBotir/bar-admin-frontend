@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -9,7 +9,7 @@ import Sellers from './pages/Sellers';
 import Statistics from './pages/Statistics';
 import Orders from './pages/Orders';
 import { Snackbar, Alert } from '@mui/material';
-import { io } from 'socket.io-client';
+import socket from './utils/socket';
 
 function App() {
   const [snackbar, setSnackbar] = useState({
@@ -17,18 +17,6 @@ function App() {
     message: '',
     severity: 'info'
   });
-
-  const socket = useMemo(() => io('http://localhost:5000', {
-    transports: ['websocket', 'polling'],
-    reconnection: true,
-    reconnectionAttempts: 5,
-    reconnectionDelay: 1000,
-    secure: true,
-    rejectUnauthorized: false,
-    auth: {
-      token: () => localStorage.getItem('token')
-    }
-  }), []);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -125,7 +113,7 @@ function App() {
       socket.off('error');
       socket.disconnect();
     };
-  }, [socket]);
+  }, []);
 
   const handleCloseSnackbar = () => {
     setSnackbar(prev => ({ ...prev, open: false }));

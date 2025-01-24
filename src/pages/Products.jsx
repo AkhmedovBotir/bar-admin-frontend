@@ -82,14 +82,14 @@ const Products = () => {
       const token = localStorage.getItem('token');
       
       // Kategoriyalarni olish
-      const categoriesResponse = await axios.get('http://localhost:5000/api/category', {
+      const categoriesResponse = await axios.get('https://barback.mixmall.uz/api/category', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
       
       // Mahsulotlarni olish
-      const productsResponse = await axios.get('http://localhost:5000/api/product', {
+      const productsResponse = await axios.get('https://barback.mixmall.uz/api/product', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -136,7 +136,7 @@ const Products = () => {
   const fetchCategories = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/category', {
+      const response = await axios.get('https://barback.mixmall.uz/api/category', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -212,7 +212,7 @@ const Products = () => {
         // Mahsulotni yangilash
         response = await axios({
           method: 'PUT',
-          url: `http://localhost:5000/api/product/${selectedProduct._id}`,
+          url: `https://barback.mixmall.uz/api/product/${selectedProduct._id}`,
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -229,7 +229,7 @@ const Products = () => {
         // Yangi mahsulot qo'shish
         response = await axios({
           method: 'POST',
-          url: 'http://localhost:5000/api/product',
+          url: 'https://barback.mixmall.uz/api/product',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
@@ -314,7 +314,7 @@ const Products = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(
-        `http://localhost:5000/api/product/${productId}/inventory`,
+        `https://barback.mixmall.uz/api/product/${productId}/inventory`,
         {
           quantity: Number(quantity),
           isAddition
@@ -350,7 +350,7 @@ const Products = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.delete(
-        `http://localhost:5000/api/product/${selectedProduct._id}`,
+        `https://barback.mixmall.uz/api/product/${selectedProduct._id}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`

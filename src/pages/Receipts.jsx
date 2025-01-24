@@ -91,7 +91,7 @@ const Receipts = () => {
 
   const fetchReceipts = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/receipts', {
+      const response = await axios.get('https://barback.mixmall.uz/api/receipts', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -104,7 +104,7 @@ const Receipts = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/products', {
+      const response = await axios.get('https://barback.mixmall.uz/api/products', {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }
@@ -161,7 +161,7 @@ const Receipts = () => {
 
   const handleSubmit = async () => {
     try {
-      await axios.post('http://localhost:5000/api/receipts', newReceipt, {
+      await axios.post('https://barback.mixmall.uz/api/receipts', newReceipt, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem('token')}`
         }

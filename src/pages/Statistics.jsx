@@ -11,8 +11,8 @@ import Inventory2Icon from '@mui/icons-material/Inventory2';
 import WarningIcon from '@mui/icons-material/Warning';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-const API_URL = 'http://localhost:5000'; // Backend API manzili
-const BACKEND_BASE_URL = 'http://localhost:3001'; // Backend base URL
+const API_URL = 'https://barback.mixmall.uz'; // Backend API manzili
+const BACKEND_BASE_URL = 'https://barback.mixmall.uz'; // Backend base URL
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
