@@ -121,9 +121,32 @@ function App() {
 
   const PrivateRoute = ({ children }) => {
     const token = localStorage.getItem('token');
-    if (!token) {
+    const adminData = localStorage.getItem('adminData');
+
+    if (!token || !adminData) {
+      // Agar token yoki admin ma'lumotlari yo'q bo'lsa, login sahifasiga yo'naltirish
+      localStorage.removeItem('token');
+      localStorage.removeItem('adminData');
       return <Navigate to="/login" />;
     }
+
+    try {
+      // Admin ma'lumotlarini JSON formatdan o'qish
+      const admin = JSON.parse(adminData);
+      if (!admin || !admin._id) {
+        // Agar admin ma'lumotlari noto'g'ri formatda bo'lsa
+        localStorage.removeItem('token');
+        localStorage.removeItem('adminData');
+        return <Navigate to="/login" />;
+      }
+    } catch (err) {
+      // JSON parse qilishda xatolik bo'lsa
+      console.error('Admin data parse error:', err);
+      localStorage.removeItem('token');
+      localStorage.removeItem('adminData');
+      return <Navigate to="/login" />;
+    }
+
     return <Layout>{children}</Layout>;
   };
 

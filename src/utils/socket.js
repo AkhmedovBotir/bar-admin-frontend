@@ -1,6 +1,6 @@
 import { io } from 'socket.io-client';
 
-const BACKEND_URL = 'https://bar-admin-backend.onrender.com';
+const BACKEND_URL = 'https://barback.mixmall.uz';
 
 const socket = io(BACKEND_URL, {
     // Asosiy transport sozlamalari

@@ -8,15 +8,15 @@ export default defineConfig({
     cors: false,
     proxy: {
       '/api': {
-        target: 'https://barbackend.mixmall.uz',
+        target: 'https://barback.mixmall.uz',
         changeOrigin: true,
         secure: false
       },
       '/socket.io': {
-        target: 'https://barbackend.mixmall.uz',
+        target: 'https://barback.mixmall.uz',
         changeOrigin: true,
         secure: false,
-        ws: false
+        ws: true
       }
     }
   }

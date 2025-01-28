@@ -53,8 +53,7 @@ function Categories() {
   const [expanded, setExpanded] = useState({});
   const [formData, setFormData] = useState({
     name: '',
-    description: '',
-    image: ''
+    description: ''
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -91,7 +90,8 @@ function Categories() {
 
   // WebSocket eventlarini ulash
   useEffect(() => {
-    socket.on('category_created', (category) => {
+    socket.on('CATEGORY_CREATED', (data) => {
+      const { category } = data;
       setCategories(prev => [...prev, category]);
       setSnackbar({
         open: true,
@@ -100,9 +100,10 @@ function Categories() {
       });
     });
 
-    socket.on('category_updated', ({ categoryId, changes }) => {
+    socket.on('CATEGORY_UPDATED', (data) => {
+      const { category } = data;
       setCategories(prev => prev.map(cat => 
-        cat._id === categoryId ? { ...cat, ...changes } : cat
+        cat._id === category._id ? category : cat
       ));
       setSnackbar({
         open: true,
@@ -111,7 +112,8 @@ function Categories() {
       });
     });
 
-    socket.on('category_deleted', (categoryId) => {
+    socket.on('CATEGORY_DELETED', (data) => {
+      const { categoryId } = data;
       setCategories(prev => prev.filter(cat => cat._id !== categoryId));
       setSnackbar({
         open: true,
@@ -120,7 +122,7 @@ function Categories() {
       });
     });
 
-    socket.on('subcategory_created', ({ categoryId, subcategory }) => {
+    socket.on('SUBCATEGORY_CREATED', ({ categoryId, subcategory }) => {
       setCategories(prev => prev.map(cat => 
         cat._id === categoryId 
           ? { ...cat, subcategories: [...cat.subcategories, subcategory] }
@@ -133,7 +135,7 @@ function Categories() {
       });
     });
 
-    socket.on('subcategory_updated', ({ categoryId, subcategoryId, changes }) => {
+    socket.on('SUBCATEGORY_UPDATED', ({ categoryId, subcategoryId, changes }) => {
       setCategories(prev => prev.map(cat => 
         cat._id === categoryId 
           ? {
@@ -151,7 +153,7 @@ function Categories() {
       });
     });
 
-    socket.on('subcategory_deleted', ({ categoryId, subcategoryId }) => {
+    socket.on('SUBCATEGORY_DELETED', ({ categoryId, subcategoryId }) => {
       setCategories(prev => prev.map(cat => 
         cat._id === categoryId 
           ? {
@@ -170,12 +172,12 @@ function Categories() {
     fetchCategories();
 
     return () => {
-      socket.off('category_created');
-      socket.off('category_updated');
-      socket.off('category_deleted');
-      socket.off('subcategory_created');
-      socket.off('subcategory_updated');
-      socket.off('subcategory_deleted');
+      socket.off('CATEGORY_CREATED');
+      socket.off('CATEGORY_UPDATED');
+      socket.off('CATEGORY_DELETED');
+      socket.off('SUBCATEGORY_CREATED');
+      socket.off('SUBCATEGORY_UPDATED');
+      socket.off('SUBCATEGORY_DELETED');
     };
   }, []);
 
@@ -196,70 +198,68 @@ function Categories() {
         message: 'Nom kiritilishi shart',
         severity: 'error'
       });
+      setLoading(false);
       return;
     }
 
     try {
       if (selectedCategory) {
         // Kategoriyani yangilash
-        if (selectedSubcategory) {
-          // Subcategory yangilash
-          const response = await api.put(
-            `/api/category/subcategories/${selectedSubcategory._id}`,
-            { 
-              name: formData.name,
-              description: formData.description || ""
-            }
-          );
+        const response = await api.put(
+          `/api/category/${selectedCategory._id}`,
+          { name: formData.name }
+        );
 
-          if (response.data.success) {
-            fetchCategories();
-            setSnackbar({
-              open: true,
-              message: response.data.message || 'Subkategoriya muvaffaqiyatli yangilandi',
-              severity: 'success'
-            });
-            handleClose();
-          }
-        } else {
-          // Kategoriyani yangilash
-          const response = await api.put(
-            `/api/category/${selectedCategory._id}`,
-            { 
-              name: formData.name,
-              image: formData.image
-            }
-          );
-
-          if (response.data.success) {
-            fetchCategories();
-            setSnackbar({
-              open: true,
-              message: response.data.message || 'Kategoriya muvaffaqiyatli yangilandi',
-              severity: 'success'
-            });
-            handleClose();
-          }
+        if (response.status === 200) {
+          setOpenDialog(false);
+          setFormData({ name: '', description: '' });
+          setSnackbar({
+            open: true,
+            message: 'Kategoriya muvaffaqiyatli yangilandi',
+            severity: 'success'
+          });
+          fetchCategories();
         }
       } else {
         // Yangi kategoriya qo'shish
-        const response = await api.post('/api/category', formData);
+        const response = await api.post('/api/category', {
+          name: formData.name
+        });
 
-        if (response.data.success) {
-          fetchCategories();
+        if (response.status === 201) {
+          setOpenDialog(false);
+          setFormData({ name: '', description: '' });
           setSnackbar({
             open: true,
-            message: response.data.message || 'Kategoriya muvaffaqiyatli qo\'shildi',
+            message: 'Kategoriya muvaffaqiyatli qo\'shildi',
             severity: 'success'
           });
-          handleClose();
+          fetchCategories();
         }
       }
     } catch (err) {
       console.error('Error submitting:', err);
+      let errorMessage = 'Xatolik yuz berdi';
+      
+      if (err.response) {
+        switch (err.response.status) {
+          case 400:
+            errorMessage = 'Noto\'g\'ri ma\'lumot kiritildi';
+            break;
+          case 404:
+            errorMessage = 'Kategoriya topilmadi';
+            break;
+          case 500:
+            errorMessage = 'Serverda xatolik yuz berdi';
+            break;
+          default:
+            errorMessage = err.response.data?.message || 'Xatolik yuz berdi';
+        }
+      }
+      
       setSnackbar({
         open: true,
-        message: err.response?.data?.message || 'Xatolik yuz berdi',
+        message: errorMessage,
         severity: 'error'
       });
     } finally {
@@ -304,6 +304,48 @@ function Categories() {
     }
   };
 
+  const handleDelete = async (category, subcategory = null) => {
+    try {
+      if (subcategory) {
+        await api.delete(
+          `/api/category/${category._id}/subcategories/${subcategory._id}`
+        );
+      } else {
+        await api.delete(`/api/category/${category._id}`);
+      }
+      
+      fetchCategories();
+      setDeleteDialog({ open: false, category: null });
+      setSnackbar({
+        open: true,
+        message: subcategory ? 'Subkategoriya o\'chirildi' : 'Kategoriya o\'chirildi',
+        severity: 'success'
+      });
+    } catch (err) {
+      console.error('Delete error:', err);
+      let errorMessage = 'O\'chirishda xatolik yuz berdi';
+      
+      if (err.response) {
+        switch (err.response.status) {
+          case 404:
+            errorMessage = 'Kategoriya topilmadi';
+            break;
+          case 500:
+            errorMessage = 'Serverda xatolik yuz berdi';
+            break;
+          default:
+            errorMessage = err.response.data?.message || 'O\'chirishda xatolik yuz berdi';
+        }
+      }
+      
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
+      });
+    }
+  };
+
   const handleDeleteClick = (category, subcategory = null) => {
     setDeleteDialog({
       open: true,
@@ -314,46 +356,7 @@ function Categories() {
 
   const handleDeleteConfirm = async () => {
     const { category, subcategory } = deleteDialog;
-    try {
-      if (subcategory) {
-        await api.delete(
-          `/api/category/${category._id}/subcategories/${subcategory._id}`
-        );
-        
-        fetchCategories();
-
-        setSnackbar({
-          open: true,
-          message: 'Subkategoriya muvaffaqiyatli o\'chirildi',
-          severity: 'success'
-        });
-      } else {
-        await api.delete(
-          `/api/category/${category._id}`
-        );
-
-        fetchCategories();
-
-        setSnackbar({
-          open: true,
-          message: 'Kategoriya muvaffaqiyatli o\'chirildi',
-          severity: 'success'
-        });
-      }
-    } catch (err) {
-      console.error('Error deleting:', err);
-      setSnackbar({
-        open: true,
-        message: err.response?.data?.message || 'Xatolik yuz berdi',
-        severity: 'error'
-      });
-    } finally {
-      setDeleteDialog({
-        open: false,
-        category: null,
-        subcategory: null
-      });
-    }
+    await handleDelete(category, subcategory);
   };
 
   const handleDeleteCancel = () => {
@@ -372,7 +375,14 @@ function Categories() {
     } else if (openSubDialog) {
       setOpenSubDialog(false);
     }
-    setFormData({ name: '', description: '', image: '' });
+    setFormData({ name: '', description: '' });
+  };
+
+  const handleAddClick = () => {
+    setSelectedCategory(null);
+    setSelectedSubcategory(null);
+    setFormData({ name: '', description: '' });
+    setOpenDialog(true);
   };
 
   const handleAddSubcategory = (category) => {
@@ -386,7 +396,7 @@ function Categories() {
       return;
     }
     setSelectedCategory(category);
-    setFormData({ name: '', description: '', image: '' });
+    setFormData({ name: '', description: '' });
     setOpenSubDialog(true);
   };
 
@@ -395,8 +405,7 @@ function Categories() {
     setSelectedSubcategory(subcategory);
     setFormData({
       name: subcategory ? subcategory.name : category.name,
-      description: subcategory ? subcategory.description : '',
-      image: category.image
+      description: subcategory ? subcategory.description : ''
     });
     setOpenDialog(true);
   };
@@ -437,7 +446,7 @@ function Categories() {
             variant="contained"
             color="primary"
             startIcon={<AddIcon />}
-            onClick={() => setOpenDialog(true)}
+            onClick={handleAddClick}
           >
             Kategoriya qo'shish
           </Button>
@@ -500,17 +509,15 @@ function Categories() {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Tahrirlash">
-                        <IconButton 
-                          onClick={() => handleEdit(category)}
-                          sx={{ 
-                            color: 'primary.main',
-                            '&:hover': { bgcolor: 'primary.lighter' }
-                          }}
-                        >
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
+                      {/* Yangilash tugmasi vaqtincha o'chirildi
+                      <IconButton
+                        edge="end"
+                        aria-label="edit"
+                        onClick={() => handleEdit(category)}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      */}
                       <Tooltip title="O'chirish">
                         <IconButton 
                           onClick={() => handleDeleteClick(category)}
@@ -582,30 +589,6 @@ function Categories() {
               onChange={handleChange}
               required
             />
-            {selectedCategory && !selectedSubcategory && (
-              <TextField
-                margin="dense"
-                name="image"
-                label="Rasmi"
-                type="text"
-                fullWidth
-                variant="outlined"
-                value={formData.image}
-                onChange={handleChange}
-              />
-            )}
-            {selectedSubcategory && (
-              <TextField
-                margin="dense"
-                name="description"
-                label="Tavsifi"
-                type="text"
-                fullWidth
-                variant="outlined"
-                value={formData.description}
-                onChange={handleChange}
-              />
-            )}
           </Box>
         </DialogContent>
         <DialogActions>

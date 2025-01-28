@@ -37,7 +37,7 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon
 } from '@mui/icons-material';
-import axiosInstance from '../utils/axios';
+import axios from 'axios';
 import socket from '../utils/socket';
 
 const Sellers = () => {
@@ -55,7 +55,8 @@ const Sellers = () => {
     username: '',
     password: '',
     newPassword: '',
-    status: 'active'
+    status: 'active',
+    phone: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -71,10 +72,66 @@ const Sellers = () => {
 
   const fetchSellers = async () => {
     try {
-      const response = await axiosInstance.get('/api/seller');
-      setSellers(response.data);
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const adminData = localStorage.getItem('adminData');
+      
+      // Debug: Token va admin ma'lumotlarini tekshirish
+      console.log('Auth check:', {
+        token: token ? token.substring(0, 20) + '...' : null,
+        adminData: adminData ? JSON.parse(adminData) : null
+      });
+
+      if (!token || !adminData) {
+        throw new Error('Token yoki admin ma\'lumotlari topilmadi');
+      }
+
+      // API so'rovi
+      console.log('Sending request to:', 'https://barback.mixmall.uz/api/seller');
+      console.log('With headers:', {
+        'Authorization': `Bearer ${token.substring(0, 20)}...`
+      });
+
+      const response = await axios.get('https://barback.mixmall.uz/api/seller', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      // Debug: API javobini tekshirish
+      console.log('API Response:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: response.data
+      });
+
+      if (response.data) {
+        setSellers(response.data);
+      }
     } catch (err) {
-      console.error('Sotuvchilarni yuklashda xatolik:', err);
+      // Debug: Xatolikni batafsil ko'rish
+      console.error('Sotuvchilarni yuklashda xatolik:', {
+        message: err.message,
+        response: {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          headers: err.response?.headers
+        },
+        request: {
+          url: err.config?.url,
+          method: err.config?.method,
+          headers: err.config?.headers
+        }
+      });
+      
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || err.message || 'Sotuvchilarni yuklashda xatolik yuz berdi',
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -98,7 +155,8 @@ const Sellers = () => {
         username: seller.username,
         password: '',
         newPassword: '',
-        status: seller.status || 'active'
+        status: seller.status || 'active',
+        phone: seller.phone
       });
     } else {
       setSelectedSeller(null);
@@ -107,7 +165,8 @@ const Sellers = () => {
         username: '',
         password: '',
         newPassword: '',
-        status: 'active'
+        status: 'active',
+        phone: ''
       });
     }
     setDialogTab(0);
@@ -122,23 +181,36 @@ const Sellers = () => {
       username: '',
       password: '',
       newPassword: '',
-      status: 'active'
+      status: 'active',
+      phone: ''
     });
     setDialogTab(0);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
+    
     try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Token topilmadi');
+      }
+
       if (selectedSeller) {
         if (dialogTab === 0) {
           // Asosiy ma'lumotlarni yangilash
-          const response = await axiosInstance.patch(
-            `/api/seller/${selectedSeller._id}`,
+          const response = await axios.patch(
+            `https://barback.mixmall.uz/api/seller/${selectedSeller._id}`,
             {
               name: formData.name,
               username: formData.username,
-              status: formData.status
+              phone: formData.phone
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
             }
           );
 
@@ -148,90 +220,80 @@ const Sellers = () => {
               message: 'Sotuvchi ma\'lumotlari yangilandi',
               severity: 'success'
             });
+            handleClose();
+            fetchSellers();
           }
         } else {
           // Parolni yangilash
           if (formData.newPassword) {
             validatePassword(formData.newPassword);
-            const response = await axiosInstance.patch(
-              `/api/seller/${selectedSeller._id}`,
+            const response = await axios.patch(
+              `https://barback.mixmall.uz/api/seller/${selectedSeller._id}`,
               {
                 password: formData.newPassword
+              },
+              {
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
               }
             );
 
             if (response.data.success) {
               setSnackbar({
                 open: true,
-                message: 'Parol muvaffaqiyatli yangilandi',
+                message: 'Parol yangilandi',
                 severity: 'success'
               });
+              handleClose();
             }
           }
         }
       } else {
         // Yangi sotuvchi qo'shish
-        if (!formData.password) {
-          throw new Error('Parol kiritish majburiy');
-        }
         validatePassword(formData.password);
-
-        const response = await axiosInstance.post(
-          '/api/seller',
+        
+        const response = await axios.post(
+          'https://barback.mixmall.uz/api/seller',
           {
             name: formData.name,
             username: formData.username,
-            password: formData.password
+            password: formData.password,
+            phone: formData.phone
+          },
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
           }
         );
 
         if (response.data.success) {
           setSnackbar({
             open: true,
-            message: 'Sotuvchi muvaffaqiyatli qo\'shildi',
+            message: 'Yangi sotuvchi qo\'shildi',
             severity: 'success'
           });
+          handleClose();
+          fetchSellers();
         }
       }
-
-      // Sotuvchilar ro'yxatini yangilash
-      await fetchSellers();
-      
-      // Socket orqali xabar yuborish
-      socket.emit(selectedSeller ? 'sellerUpdated' : 'sellerCreated', { 
-        id: selectedSeller?._id 
-      });
-      
-      // Modalni yopish
-      handleClose();
-      
     } catch (err) {
-      console.error('Error:', err);
-      let errorMessage = 'Xatolik yuz berdi';
-      
-      if (err.response) {
-        switch (err.response.status) {
-          case 400:
-            errorMessage = err.response.data.message || 'Noto\'g\'ri ma\'lumotlar kiritildi';
-            break;
-          case 401:
-            errorMessage = 'Sizda bu amalni bajarish uchun huquq yo\'q';
-            break;
-          case 404:
-            errorMessage = 'Sotuvchi topilmadi';
-            break;
-          default:
-            errorMessage = err.response.data.message || 'Serverda xatolik yuz berdi';
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
+      console.error('Sotuvchi qo\'shishda xatolik:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Sotuvchi qo\'shishda xatolik yuz berdi';
       setSnackbar({
         open: true,
         message: errorMessage,
         severity: 'error'
       });
+
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('adminData');
+        window.location.href = '/login';
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -257,7 +319,11 @@ const Sellers = () => {
 
   const handleDeleteConfirm = async () => {
     try {
-      await axiosInstance.delete(`/api/seller/${deleteDialog.seller._id}`);
+      await axios.delete(`https://barback.mixmall.uz/api/seller/${deleteDialog.seller._id}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       
       setSnackbar({
         open: true,
@@ -478,6 +544,14 @@ const Sellers = () => {
                   label="Username"
                   name="username"
                   value={formData.username}
+                  onChange={handleChange}
+                  sx={{ mb: 2 }}
+                />
+                <TextField
+                  fullWidth
+                  label="Telefon"
+                  name="phone"
+                  value={formData.phone}
                   onChange={handleChange}
                   sx={{ mb: 2 }}
                 />

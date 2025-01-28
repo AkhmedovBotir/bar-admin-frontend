@@ -16,22 +16,82 @@ const Login = () => {
     setError('');
 
     try {
+      // Request body ni log qilish
+      console.log('Login request body:', { username, password });
+      
+      // Login so'rovini yuborish
       const response = await axios.post('https://barback.mixmall.uz/api/admin/login', {
         username,
         password
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      // To'liq response ni log qilish
+      console.log('Full login response:', {
+        status: response.status,
+        headers: response.headers,
+        data: response.data
       });
       
       if (response.data.success) {
-        const { token } = response.data.data;
-        localStorage.setItem('token', token);
+        const { token, admin } = response.data.data;
+        
+        // Token va admin ma'lumotlarini tekshirish
+        console.log('Token structure:', {
+          raw: token,
+          length: token?.length,
+          startsWithBearer: token?.startsWith('Bearer ')
+        });
+        
+        console.log('Admin data:', admin);
+        
+        if (!token) {
+          throw new Error('Token topilmadi');
+        }
+        
+        if (!admin) {
+          throw new Error('Admin ma\'lumotlari topilmadi');
+        }
+        
+        // Token ni tozalash va saqlash
+        const cleanToken = token.startsWith('Bearer ') ? token.slice(7) : token;
+        localStorage.setItem('token', cleanToken);
+        localStorage.setItem('adminData', JSON.stringify(admin));
+        
+        // Saqlangan ma'lumotlarni tekshirish
+        console.log('Saved data:', {
+          token: localStorage.getItem('token'),
+          adminData: localStorage.getItem('adminData')
+        });
+        
         navigate('/');
       } else {
         setError('Login yoki parol noto\'g\'ri');
       }
     } catch (err) {
-      console.error('Login error:', err);
+      // Xatolikni to'liq log qilish
+      console.error('Login error:', {
+        message: err.message,
+        response: {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data,
+          headers: err.response?.headers
+        },
+        request: {
+          headers: err.config?.headers,
+          url: err.config?.url,
+          method: err.config?.method
+        }
+      });
+      
       if (err.response?.status === 401) {
         setError('Login yoki parol noto\'g\'ri');
+      } else if (err.message.includes('Token') || err.message.includes('Admin')) {
+        setError(err.message);
       } else {
         setError('Serverga ulanishda xatolik yuz berdi');
       }

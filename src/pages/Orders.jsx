@@ -73,6 +73,7 @@ const Orders = () => {
       const response = await axiosInstance.get(`${API_URL}/api/order-history/completed-orders`);
 
       if (response.data.success) {
+        console.log('Barcha buyurtmalar:', response.data.data);
         setOrders(response.data.data);
       }
     } catch (error) {
@@ -99,6 +100,7 @@ const Orders = () => {
           const orderDate = new Date(order.createdAt);
           return orderDate >= today;
         });
+        console.log('Kunlik buyurtmalar:', filtered);
         break;
       
       case 1: // Haftalik
@@ -106,6 +108,7 @@ const Orders = () => {
           const orderDate = new Date(order.createdAt);
           return orderDate >= thisWeekStart;
         });
+        console.log('Haftalik buyurtmalar:', filtered);
         break;
       
       case 2: // Oylik
@@ -113,10 +116,12 @@ const Orders = () => {
           const orderDate = new Date(order.createdAt);
           return orderDate >= thisMonthStart;
         });
+        console.log('Oylik buyurtmalar:', filtered);
         break;
       
       default: // Hammasi
         filtered = orders.orders;
+        console.log('Barcha buyurtmalar:', filtered);
     }
 
     setFilteredOrders(filtered);

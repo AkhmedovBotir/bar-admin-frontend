@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Tabs, Tab, Card, Grid, Typography, Box, Paper, CircularProgress, TableContainer, Table, TableHead, TableBody, TableCell, TableRow, Chip } from '@mui/material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { Tabs, Tab, Card, Grid, Typography, Box, Paper, CircularProgress, TableContainer, Table, TableHead, TableBody, TableCell, TableRow, Chip, Avatar, Tooltip, Dialog, DialogTitle, DialogContent, IconButton, TextField, InputAdornment, MenuItem, Select, FormControl, InputLabel } from '@mui/material';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer } from 'recharts';
+import api from '../utils/axios';
 import axios from 'axios';
 import { formatPrice } from '../utils/format';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
@@ -9,10 +10,12 @@ import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import WarningIcon from '@mui/icons-material/Warning';
+import CategoryIcon from '@mui/icons-material/Category';
+import CloseIcon from '@mui/icons-material/Close';
+import SearchIcon from '@mui/icons-material/Search';
+import FilterListIcon from '@mui/icons-material/FilterList';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-const API_URL = 'https://barback.mixmall.uz'; // Backend API manzili
-const BACKEND_BASE_URL = 'https://barback.mixmall.uz'; // Backend base URL
 
 const TabPanel = (props) => {
   const { children, value, index, ...other } = props;
@@ -33,20 +36,35 @@ const TabPanel = (props) => {
 
 const Statistics = () => {
   const [tabValue, setTabValue] = useState(0);
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState('');
+  const [sortOrder, setSortOrder] = useState('asc');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [orderStatus, setOrderStatus] = useState('all');
+  const [dateRange, setDateRange] = useState({
+    startDate: '',
+    endDate: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dailyStats, setDailyStats] = useState(null);
   const [weeklyStats, setWeeklyStats] = useState(null);
   const [monthlyStats, setMonthlyStats] = useState(null);
   const [warehouseStats, setWarehouseStats] = useState(null);
-  const [products, setProducts] = useState([]); // Add products state
+  const [products, setProducts] = useState([]); 
+  const [sellersStats, setSellersStats] = useState(null);
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const [sellerOrders, setSellerOrders] = useState(null);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [filteredProducts, setFilteredProducts] = useState([]);
 
   const fetchStatistics = async (period) => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/api/statistics/${period}`, {
+      const response = await api.get(`/api/statistics/${period}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -80,26 +98,66 @@ const Statistics = () => {
   const fetchProducts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_URL}/api/product`, {
+      const response = await api.get('/api/product', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      // API response ichidan products array'ini olish
       const productsData = response.data.data.items || [];
       setProducts(productsData);
     } catch (error) {
       console.error('Error fetching products:', error);
-      setProducts([]); // Xatolik bo'lsa bo'sh array o'rnatish
+      setProducts([]); 
     }
   };
 
-  useEffect(() => {
-    const periods = ['daily', 'weekly', 'monthly', 'warehouse'];
-    const currentPeriod = periods[tabValue];
-    fetchStatistics(currentPeriod);
-    fetchProducts(); // Add products fetching
-  }, [tabValue]);
+  const fetchSellersStatistics = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('API so\'rov URL:', `https://barback.mixmall.uz/api/statistics/sellers?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`);
+      console.log('Token:', localStorage.getItem('token'));
+      
+      const response = await axios.get(
+        `https://barback.mixmall.uz/api/statistics/sellers?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+      
+      console.log('API javobi:', response.data);
+      
+      if (response.data.success) {
+        console.log('Sotuvchilar statistikasi:', response.data.data);
+        setSellersStats(response.data.data);
+      } else {
+        console.error('API xatolik:', response.data);
+        setError('Ma\'lumotlarni olishda xatolik yuz berdi');
+      }
+    } catch (err) {
+      console.error('API so\'rov xatoligi:', err);
+      console.error('Xatolik tafsilotlari:', err.response?.data);
+      setError(err.response?.data?.message || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSellerOrders = async (sellerId) => {
+    setLoadingOrders(true);
+    try {
+      const response = await api.get(`/api/orders?sellerId=${sellerId}`);
+      if (response.data.success) {
+        setSellerOrders(response.data.data);
+      }
+    } catch (err) {
+      console.error('Buyurtmalarni olishda xatolik:', err);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
 
   const getCurrentStats = () => {
     switch(tabValue) {
@@ -121,8 +179,7 @@ const Statistics = () => {
     if (!stats) return [];
 
     switch(tabValue) {
-      case 0: // Kunlik
-        // Har bir mahsulot uchun kunlik sotilgan miqdorni hisoblash
+      case 0: 
         const dailyTotalProducts = stats.productSalesHistory.reduce((total, product) => {
           return total + product.totalQuantity;
         }, 0);
@@ -133,8 +190,7 @@ const Statistics = () => {
           "Summa": stats.totalAmount
         }];
 
-      case 1: // Haftalik
-        // Har bir kun uchun sotilgan mahsulotlar sonini hisoblash
+      case 1: 
         return stats.dailyStats.map(day => {
           const totalProducts = stats.productSalesHistory.reduce((total, product) => {
             const dayStats = product.dailyStats.find(d => d.date === day.date);
@@ -148,14 +204,14 @@ const Statistics = () => {
           };
         });
 
-      case 2: // Oylik
+      case 2: 
         return stats.weeklyStats.map(stat => ({
           name: `${stat.week}-hafta`,
           "Sotilgan mahsulotlar": stat.totalOrders,
           "Summa": stat.totalAmount
         }));
 
-      case 3: // Ombor
+      case 3: 
         return stats.productSalesHistory.map(product => ({
           name: product.name,
           "Sotilgan mahsulotlar": product.totalQuantity,
@@ -169,6 +225,12 @@ const Statistics = () => {
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
+  };
+
+  const handleSellerClick = (seller) => {
+    console.log('Tanlangan sotuvchi:', seller);
+    setSelectedSeller(seller);
+    fetchSellerOrders(seller.sellerId);
   };
 
   const currentStats = getCurrentStats();
@@ -365,7 +427,49 @@ const Statistics = () => {
     return product ? product.inventory : 0;
   };
 
+  useEffect(() => {
+    const periods = ['daily', 'weekly', 'monthly', 'warehouse'];
+    const currentPeriod = periods[tabValue];
+    if (tabValue < 4) {
+      fetchStatistics(currentPeriod);
+    } else if (tabValue === 4) {
+      fetchSellersStatistics();
+    }
+    fetchProducts(); 
+  }, [tabValue, dateRange]);
+
+  useEffect(() => {
+    if (selectedSeller?.allProducts) {
+      const filtered = selectedSeller.allProducts
+        .filter(product => 
+          product.name.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+        .sort((a, b) => {
+          let comparison = 0;
+          switch (sortField) {
+            case 'name':
+              comparison = a.name.localeCompare(b.name);
+              break;
+            case 'quantity':
+              comparison = a.quantity - b.quantity;
+              break;
+            case 'price':
+              comparison = a.price - b.price;
+              break;
+            case 'total':
+              comparison = a.totalAmount - b.totalAmount;
+              break;
+            default:
+              comparison = 0;
+          }
+          return sortOrder === 'asc' ? comparison : -comparison;
+        });
+      setFilteredProducts(filtered);
+    }
+  }, [selectedSeller, searchQuery, sortField, sortOrder]);
+
   return (
+    <>
     <Box sx={{ width: '100%', borderRadius: 2, boxShadow: '0px 0px 10px rgba(0, 0, 0, 0.1)', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
       <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2, bgcolor: 'white' }}>
         <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', color: '#1a237e' }}>
@@ -394,6 +498,7 @@ const Statistics = () => {
           <Tab label="Haftalik" />
           <Tab label="Oylik" />
           <Tab label="Ombor" />
+          <Tab label="Sotuvchilar" />
         </Tabs>
 
         {loading ? (
@@ -419,7 +524,7 @@ const Statistics = () => {
                       <XAxis dataKey="name" />
                       <YAxis yAxisId="left" orientation="left" stroke="#3f51b5" />
                       <YAxis yAxisId="right" orientation="right" stroke="#00C49F" />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Legend />
                       <Bar yAxisId="left" dataKey="Sotilgan mahsulotlar" fill="#3f51b5" />
                       <Bar yAxisId="right" dataKey="Summa" fill="#00C49F" />
@@ -573,7 +678,7 @@ const Statistics = () => {
                       <XAxis dataKey="name" />
                       <YAxis yAxisId="left" orientation="left" stroke="#3f51b5" />
                       <YAxis yAxisId="right" orientation="right" stroke="#00C49F" />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Legend />
                       <Bar yAxisId="left" dataKey="Sotilgan mahsulotlar" fill="#3f51b5" />
                       <Bar yAxisId="right" dataKey="Summa" fill="#00C49F" />
@@ -727,7 +832,7 @@ const Statistics = () => {
                       <XAxis dataKey="name" />
                       <YAxis yAxisId="left" orientation="left" stroke="#3f51b5" />
                       <YAxis yAxisId="right" orientation="right" stroke="#00C49F" />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Legend />
                       <Bar yAxisId="left" dataKey="Sotilgan mahsulotlar" fill="#3f51b5" />
                       <Bar yAxisId="right" dataKey="Summa" fill="#00C49F" />
@@ -1000,9 +1105,7 @@ const Statistics = () => {
                       <Table>
                         <TableHead>
                           <TableRow>
-                            <TableCell sx={{ bgcolor: '#f5f5f5', color: '#3f51b5', fontWeight: 'bold' }}>
-                              Mahsulot
-                            </TableCell>
+                            <TableCell>Mahsulot</TableCell>
                             <TableCell align="center" sx={{ bgcolor: '#f5f5f5', color: '#3f51b5', fontWeight: 'bold' }}>
                               Qoldiq
                             </TableCell>
@@ -1034,7 +1137,7 @@ const Statistics = () => {
                                   </Box>
                                   <Box>
                                     <Typography>{product.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" color="textSecondary">
                                       {product.category} • {product.unitSize} {product.unit}
                                     </Typography>
                                   </Box>
@@ -1071,9 +1174,7 @@ const Statistics = () => {
                       <Table>
                         <TableHead>
                           <TableRow>
-                            <TableCell sx={{ bgcolor: '#f5f5f5', color: '#3f51b5', fontWeight: 'bold' }}>
-                              Mahsulot
-                            </TableCell>
+                            <TableCell>Mahsulot</TableCell>
                             <TableCell align="center" sx={{ bgcolor: '#f5f5f5', color: '#3f51b5', fontWeight: 'bold' }}>
                               O'rtacha kunlik sotilish
                             </TableCell>
@@ -1105,7 +1206,7 @@ const Statistics = () => {
                                   </Box>
                                   <Box>
                                     <Typography>{product.name}</Typography>
-                                    <Typography variant="caption" color="text.secondary">
+                                    <Typography variant="caption" color="textSecondary">
                                       {product.category} • {product.unitSize} {product.unit}
                                     </Typography>
                                   </Box>
@@ -1123,10 +1224,635 @@ const Statistics = () => {
                 </>
               )}
             </TabPanel>
+
+            <TabPanel value={tabValue} index={4}>
+              {loading ? (
+                <Box display="flex" justifyContent="center" p={3}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Paper sx={{ p: 2, bgcolor: 'error.light', color: 'error.contrastText' }}>
+                  <Typography variant="h6">
+                    <WarningIcon sx={{ mr: 1 }} />
+                    Xatolik yuz berdi: {error}
+                  </Typography>
+                </Paper>
+              ) : sellersStats ? (
+                <>
+                  
+
+                  <Paper elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+                    <Typography variant="h6" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+                      <Box display="flex" alignItems="center" justifyContent="space-between">
+                        <Box display="flex" alignItems="center">
+                          <StorefrontIcon sx={{ mr: 1 }} />
+                          Sotuvchilar ro'yxati
+                        </Box>
+                      </Box>
+                    </Typography>
+                    <TableContainer>
+                      <Table>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Sotuvchi</TableCell>
+                            <TableCell align="right">
+                              <Tooltip title="Jami buyurtmalar soni">
+                                <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                  <ShoppingBagIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                                  Buyurtmalar
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Tooltip title="Jami savdo summasi">
+                                <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                  <MonetizationOnIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                                  Jami savdo
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Tooltip title="Sotilgan mahsulotlar soni">
+                                <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                  <Inventory2Icon sx={{ mr: 0.5, fontSize: 20 }} />
+                                  Mahsulotlar
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Tooltip title="O'rtacha buyurtma summasi">
+                                <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                  <TrendingUpIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                                  O'rtacha buyurtma
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {sellersStats.sellers.map((seller) => (
+                            <TableRow key={seller.sellerId} hover onClick={() => handleSellerClick(seller)} sx={{ cursor: 'pointer' }}>
+                              <TableCell>
+                                <Box display="flex" alignItems="center">
+                                  <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                                    {seller.name.charAt(0)}
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="subtitle2">{seller.name}</Typography>
+                                    <Typography variant="caption" color="textSecondary">
+                                      @{seller.username}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Chip
+                                  label={seller.totalOrders}
+                                  color="primary"
+                                  size="small"
+                                  sx={{ minWidth: 60 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="subtitle2" color="success.main">
+                                  {formatPrice(seller.totalAmount)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Chip
+                                  label={seller.totalProducts}
+                                  color="info"
+                                  size="small"
+                                  sx={{ minWidth: 60 }}
+                                />
+                              </TableCell>
+                              <TableCell align="right">
+                                <Typography variant="subtitle2" color="warning.main">
+                                  {formatPrice(seller.averageOrderAmount)}
+                                </Typography>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+
+                  {sellersStats.sellers.map((seller) => (
+                    <Paper key={seller.sellerId} elevation={0} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
+                      <Typography variant="h6" gutterBottom sx={{ mb: 3, display: 'flex', alignItems: 'center' }}>
+                        <Box display="flex" alignItems="center">
+                          <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                            {seller.name.charAt(0)}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="subtitle1">{seller.name} - Top 5 mahsulotlar</Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              @{seller.username}
+                            </Typography>
+                          </Box>
+                        </Box>
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Mahsulot</TableCell>
+                              <TableCell align="right">
+                                <Tooltip title="Sotilgan soni">
+                                  <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                    <Inventory2Icon sx={{ mr: 0.5, fontSize: 20 }} />
+                                    Soni
+                                  </Box>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Tooltip title="Mahsulot narxi">
+                                  <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                    <MonetizationOnIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                                    Narxi
+                                  </Box>
+                                </Tooltip>
+                              </TableCell>
+                              <TableCell align="right">
+                                <Tooltip title="Jami savdo summasi">
+                                  <Box display="flex" alignItems="center" justifyContent="flex-end">
+                                    <TrendingUpIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                                    Jami summa
+                                  </Box>
+                                </Tooltip>
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {seller.topProducts.map((product) => (
+                              <TableRow key={product.productId} hover>
+                                <TableCell>
+                                  <Box display="flex" alignItems="center">
+                                    <CategoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                                    <Typography variant="subtitle2">{product.name}</Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Chip
+                                    label={product.quantity}
+                                    color="info"
+                                    size="small"
+                                    sx={{ minWidth: 60 }}
+                                  />
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="subtitle2" color="success.main">
+                                    {formatPrice(product.price)}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="subtitle2" color="warning.main">
+                                    {formatPrice(product.totalAmount)}
+                                  </Typography>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Paper>
+                  ))}
+                </>
+              ) : null}
+            </TabPanel>
           </>
         )}
       </Paper>
     </Box>
+
+    <Dialog 
+      open={Boolean(selectedSeller)} 
+      onClose={() => setSelectedSeller(null)}
+      maxWidth="md"
+      fullWidth
+    >
+      {selectedSeller && (
+        <>
+          <DialogTitle>
+            <Box display="flex" alignItems="center" justifyContent="space-between">
+              <Box display="flex" alignItems="center">
+                <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
+                  {selectedSeller?.name?.charAt(0)}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">{selectedSeller?.name}</Typography>
+                  <Typography variant="caption" color="textSecondary">
+                    @{selectedSeller?.username}
+                  </Typography>
+                </Box>
+              </Box>
+              <IconButton onClick={() => setSelectedSeller(null)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Tabs
+              value={selectedTab}
+              onChange={(e, newValue) => setSelectedTab(newValue)}
+              sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}
+            >
+              <Tab label="Statistika" />
+              <Tab label="Barcha mahsulotlar" />
+              <Tab label="Buyurtmalar tarixi" />
+            </Tabs>
+            <TabPanel value={selectedTab} index={0}>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={6}>
+                  <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" color="textSecondary">
+                      Birinchi buyurtma
+                    </Typography>
+                    <Typography variant="subtitle1">
+                      {selectedSeller?.firstOrderDate ? (
+                        <>
+                          {new Date(selectedSeller.firstOrderDate).toLocaleDateString('uz-UZ')}
+                          {' '}
+                          {new Date(selectedSeller.firstOrderDate).toLocaleTimeString('uz-UZ')}
+                        </>
+                      ) : '-'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.50' }}>
+                    <Typography variant="body2" color="textSecondary">
+                      Oxirgi buyurtma
+                    </Typography>
+                    <Typography variant="subtitle1">
+                      {selectedSeller?.lastOrderDate ? (
+                        <>
+                          {new Date(selectedSeller.lastOrderDate).toLocaleDateString('uz-UZ')}
+                          {' '}
+                          {new Date(selectedSeller.lastOrderDate).toLocaleTimeString('uz-UZ')}
+                        </>
+                      ) : '-'}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={3}>
+                  <Paper elevation={0} sx={{ p: 2, height: '100%', bgcolor: 'primary.light', color: 'primary.contrastText', borderRadius: 2 }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <ShoppingBagIcon sx={{ mr: 1 }} />
+                      <Typography variant="subtitle2">
+                        Buyurtmalar
+                      </Typography>
+                    </Box>
+                    <Typography variant="h4">
+                      {selectedSeller?.totalOrders || 0}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Paper elevation={0} sx={{ p: 2, height: '100%', bgcolor: 'success.light', color: 'success.contrastText', borderRadius: 2 }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <MonetizationOnIcon sx={{ mr: 1 }} />
+                      <Typography variant="subtitle2">
+                        Jami savdo
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6">
+                      {formatPrice(selectedSeller?.totalAmount || 0)}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Paper elevation={0} sx={{ p: 2, height: '100%', bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 2 }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <Inventory2Icon sx={{ mr: 1 }} />
+                      <Typography variant="subtitle2">
+                        Mahsulotlar
+                      </Typography>
+                    </Box>
+                    <Typography variant="h4">
+                      {selectedSeller?.totalProducts || 0}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <Paper elevation={0} sx={{ p: 2, height: '100%', bgcolor: 'info.light', color: 'info.contrastText', borderRadius: 2 }}>
+                    <Box display="flex" alignItems="center" mb={1}>
+                      <TrendingUpIcon sx={{ mr: 1 }} />
+                      <Typography variant="subtitle2">
+                        O'rtacha buyurtma
+                      </Typography>
+                    </Box>
+                    <Typography variant="h6">
+                      {formatPrice(selectedSeller?.averageOrderAmount || 0)}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
+              
+            </TabPanel>
+
+            <TabPanel value={selectedTab} index={1}>
+              <Box sx={{ mt: 0 }}>
+                <Typography variant="h6" gutterBottom>
+                  Barcha mahsulotlar
+                </Typography>
+                
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={6}>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      placeholder="Mahsulot nomini qidirish..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth>
+                      <InputLabel>Saralash</InputLabel>
+                      <Select
+                        value={sortField}
+                        onChange={(e) => setSortField(e.target.value)}
+                        label="Saralash"
+                      >
+                        <MenuItem value="name">Nomi bo'yicha</MenuItem>
+                        <MenuItem value="quantity">Soni bo'yicha</MenuItem>
+                        <MenuItem value="price">Narxi bo'yicha</MenuItem>
+                        <MenuItem value="total">Umumiy summa bo'yicha</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth>
+                      <InputLabel>Tartib</InputLabel>
+                      <Select
+                        value={sortOrder}
+                        onChange={(e) => setSortOrder(e.target.value)}
+                        label="Tartib"
+                      >
+                        <MenuItem value="asc">O'sish bo'yicha</MenuItem>
+                        <MenuItem value="desc">Kamayish bo'yicha</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+
+                <TableContainer component={Paper} elevation={0}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Mahsulot</TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Sotilgan soni">
+                            <Box display="flex" alignItems="center" justifyContent="flex-end">
+                              <Inventory2Icon sx={{ mr: 0.5, fontSize: 20 }} />
+                              Soni
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Mahsulot narxi">
+                            <Box display="flex" alignItems="center" justifyContent="flex-end">
+                              <MonetizationOnIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                              Narxi
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell align="right">
+                          <Tooltip title="Jami savdo summasi">
+                            <Box display="flex" alignItems="center" justifyContent="flex-end">
+                              <TrendingUpIcon sx={{ mr: 0.5, fontSize: 20 }} />
+                              Jami summa
+                            </Box>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product.productId} hover>
+                          <TableCell>
+                            <Box display="flex" alignItems="center">
+                              <CategoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                              <Typography variant="subtitle2">
+                                {product.name}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              label={product.quantity}
+                              color="info"
+                              size="small"
+                              sx={{ minWidth: 60 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="subtitle2" color="success.main">
+                              {formatPrice(product.price)}
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="subtitle2" color="warning.main">
+                              {formatPrice(product.totalAmount)}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </TabPanel>
+
+            <TabPanel value={selectedTab} index={2}>
+              <Box sx={{ mt: 0 }}>
+                <Typography variant="h6" gutterBottom>
+                  Buyurtmalar tarixi
+                </Typography>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} md={3}>
+                    <TextField
+                      fullWidth
+                      variant="outlined"
+                      placeholder="Buyurtma ID bo'yicha qidirish..."
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth>
+                      <InputLabel>Status</InputLabel>
+                      <Select
+                        value={orderStatus}
+                        onChange={(e) => setOrderStatus(e.target.value)}
+                        label="Status"
+                      >
+                        <MenuItem value="all">Barchasi</MenuItem>
+                        <MenuItem value="completed">Yakunlangan</MenuItem>
+                        <MenuItem value="pending">Kutilmoqda</MenuItem>
+                        <MenuItem value="cancelled">Bekor qilingan</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={3}>
+                    <FormControl fullWidth>
+                      <InputLabel>Sana bo'yicha</InputLabel>
+                      <Select
+                        value={dateRange.startDate ? 'custom' : 'all'}
+                        onChange={(e) => {
+                          if (e.target.value === 'all') {
+                            setDateRange({ startDate: '', endDate: '' });
+                          } else if (e.target.value === 'today') {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            setDateRange({
+                              startDate: today.toISOString(),
+                              endDate: new Date().toISOString()
+                            });
+                          } else if (e.target.value === 'week') {
+                            const today = new Date();
+                            const weekAgo = new Date(today);
+                            weekAgo.setDate(weekAgo.getDate() - 7);
+                            setDateRange({
+                              startDate: weekAgo.toISOString(),
+                              endDate: today.toISOString()
+                            });
+                          } else if (e.target.value === 'month') {
+                            const today = new Date();
+                            const monthAgo = new Date(today);
+                            monthAgo.setMonth(monthAgo.getMonth() - 1);
+                            setDateRange({
+                              startDate: monthAgo.toISOString(),
+                              endDate: today.toISOString()
+                            });
+                          }
+                        }}
+                        label="Sana bo'yicha"
+                      >
+                        <MenuItem value="all">Barchasi</MenuItem>
+                        <MenuItem value="today">Bugun</MenuItem>
+                        <MenuItem value="week">Oxirgi 7 kun</MenuItem>
+                        <MenuItem value="month">Oxirgi 30 kun</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+
+                <TableContainer component={Paper} elevation={0}>
+                  <Table>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Buyurtma ID</TableCell>
+                        <TableCell>Sana</TableCell>
+                        <TableCell>Mahsulotlar</TableCell>
+                        <TableCell align="right">Status</TableCell>
+                        <TableCell align="right">Summa</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {selectedSeller?.orders
+                        ?.filter(order => {
+                          // ID bo'yicha qidirish
+                          if (orderSearchQuery && !order.orderId.toString().includes(orderSearchQuery)) {
+                            return false;
+                          }
+                          // Status bo'yicha filterlash
+                          if (orderStatus !== 'all' && order.status !== orderStatus) {
+                            return false;
+                          }
+                          // Sana bo'yicha filterlash
+                          if (dateRange.startDate && dateRange.endDate) {
+                            const orderDate = new Date(order.createdAt);
+                            const start = new Date(dateRange.startDate);
+                            const end = new Date(dateRange.endDate);
+                            if (orderDate < start || orderDate > end) {
+                              return false;
+                            }
+                          }
+                          return true;
+                        })
+                        ?.map((order) => (
+                          <TableRow key={order.orderId} hover>
+                            <TableCell>
+                              <Typography variant="subtitle2">
+                                #{order.orderId}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {new Date(order.createdAt).toLocaleDateString('uz-UZ')}
+                              </Typography>
+                              <Typography variant="caption" color="textSecondary">
+                                {new Date(order.createdAt).toLocaleTimeString('uz-UZ')}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              {order.products.map((product, index) => (
+                                <Box key={product._id} sx={{ mb: index !== order.products.length - 1 ? 1 : 0 }}>
+                                  <Typography variant="body2">
+                                    {product.name}
+                                  </Typography>
+                                  <Typography variant="caption" color="textSecondary">
+                                    {product.quantity} {product.unit} ({product.unitSize} {product.unit})
+                                  </Typography>
+                                </Box>
+                              ))}
+                            </TableCell>
+                            <TableCell align="right">
+                              <Chip
+                                label={
+                                  order.status === 'completed' ? 'Yakunlangan' :
+                                  order.status === 'pending' ? 'Kutilmoqda' :
+                                  order.status === 'cancelled' ? 'Bekor qilingan' : 
+                                  order.status
+                                }
+                                color={
+                                  order.status === 'completed' ? 'success' :
+                                  order.status === 'pending' ? 'warning' :
+                                  order.status === 'cancelled' ? 'error' : 
+                                  'default'
+                                }
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell align="right">
+                              <Typography variant="subtitle2" color="success.main">
+                                {formatPrice(order.totalSum)}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </TabPanel>
+          </DialogContent>
+        </>
+      )}
+    </Dialog>
+    </>
+
   );
 };
 
