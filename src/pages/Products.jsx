@@ -88,11 +88,33 @@ const Products = () => {
         }
       });
       
+      // Filter parametrlarini tayyorlash
+      const params = {
+        page: page + 1,
+        limit: rowsPerPage,
+        orderBy: orderBy,
+        order: order
+      };
+
+      // Qidiruv parametrlarini qo'shish
+      if (filters.name) {
+        params.search = filters.name;
+      }
+      if (filters.category) {
+        params.category = filters.category;
+      }
+      if (filters.subcategory) {
+        params.subcategory = filters.subcategory;
+      }
+
+      console.log('Filter params:', params); // Parametrlarni tekshirish uchun
+
       // Mahsulotlarni olish
       const productsResponse = await axios.get('https://barback.mixmall.uz/api/product', {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        params: params
       });
 
       if (productsResponse.data.success) {
@@ -130,7 +152,7 @@ const Products = () => {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-  }, [page, rowsPerPage, orderBy, order, searchTerm, selectedCategory, selectedSubcategory]);
+  }, [page, rowsPerPage, orderBy, order, filters]);
 
   // Kategoriyalarni yuklash
   const fetchCategories = async () => {
@@ -554,6 +576,7 @@ const Products = () => {
       category: categoryId,
       subcategory: '' // Kategoriya o'zgarganda subkategoriyani tozalash
     });
+    setPage(0); // Kategoriya o'zgarganda page'ni 0 ga qaytarish
   };
 
   // Filter subkategoriya o'zgarganda
@@ -563,6 +586,23 @@ const Products = () => {
       ...filters,
       subcategory: subcategoryId
     });
+    setPage(0); // Subkategoriya o'zgarganda page'ni 0 ga qaytarish
+  };
+
+  // Nom bo'yicha qidiruv
+  const handleNameSearch = (value) => {
+    setFilters({
+      ...filters,
+      name: value
+    });
+    setPage(0); // Qidiruv o'zgarganda page'ni 0 ga qaytarish
+  };
+
+  // Filterni tozalash
+  const handleClearFilters = () => {
+    setFilters({ name: '', category: '', subcategory: '' });
+    setFilterCategory(null);
+    setPage(0); // Filter tozalanganda page'ni 0 ga qaytarish
   };
 
   return (
@@ -597,7 +637,7 @@ const Products = () => {
               label="Nomi bo'yicha qidirish"
               size="small"
               value={filters.name}
-              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
+              onChange={(e) => handleNameSearch(e.target.value)}
               sx={{ 
                 minWidth: 200,
                 '& .MuiOutlinedInput-root': { borderRadius: '8px' }
@@ -648,10 +688,7 @@ const Products = () => {
             {(filters.name || filters.category || filters.subcategory) && (
               <Button
                 variant="outlined"
-                onClick={() => {
-                  setFilters({ name: '', category: '', subcategory: '' });
-                  setFilterCategory(null);
-                }}
+                onClick={handleClearFilters}
                 startIcon={<ClearIcon />}
               >
                 Tozalash

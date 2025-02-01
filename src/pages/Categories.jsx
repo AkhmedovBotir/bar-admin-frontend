@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../utils/axios';
 import socket from '../utils/socket';
 import {
@@ -181,6 +181,15 @@ function Categories() {
     };
   }, []);
 
+  const handleSearch = (value) => {
+    setSearchTerm(value);
+    setPage(0); // Qidiruv o'zgarganda page'ni 0 ga o'rnatish
+  };
+
+  const filteredCategories = categories.filter(category =>
+    category.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const handleChange = (e) => {
     setFormData(prev => ({
       ...prev,
@@ -204,21 +213,40 @@ function Categories() {
 
     try {
       if (selectedCategory) {
-        // Kategoriyani yangilash
-        const response = await api.put(
-          `/api/category/${selectedCategory._id}`,
-          { name: formData.name }
-        );
+        if (selectedSubcategory) {
+          // Subkategoriyani yangilash
+          const response = await api.put(
+            `/api/category/${selectedCategory._id}/subcategories/${selectedSubcategory._id}`,
+            { name: formData.name }
+          );
 
-        if (response.status === 200) {
-          setOpenDialog(false);
-          setFormData({ name: '', description: '' });
-          setSnackbar({
-            open: true,
-            message: 'Kategoriya muvaffaqiyatli yangilandi',
-            severity: 'success'
-          });
-          fetchCategories();
+          if (response.status === 200) {
+            setOpenDialog(false);
+            setFormData({ name: '', description: '' });
+            setSnackbar({
+              open: true,
+              message: 'Subkategoriya muvaffaqiyatli yangilandi',
+              severity: 'success'
+            });
+            fetchCategories();
+          }
+        } else {
+          // Kategoriyani yangilash
+          const response = await api.put(
+            `/api/category/${selectedCategory._id}`,
+            { name: formData.name }
+          );
+
+          if (response.status === 200) {
+            setOpenDialog(false);
+            setFormData({ name: '', description: '' });
+            setSnackbar({
+              open: true,
+              message: 'Kategoriya muvaffaqiyatli yangilandi',
+              severity: 'success'
+            });
+            fetchCategories();
+          }
         }
       } else {
         // Yangi kategoriya qo'shish
@@ -401,6 +429,13 @@ function Categories() {
   };
 
   const handleEdit = (category, subcategory = null) => {
+    console.log('Category:', category);
+    if (subcategory) {
+      console.log('Subcategory:', subcategory);
+      console.log('Subcategory products:', subcategory.products || []);
+    }
+    console.log('Category subcategories:', category.subcategories || []);
+    
     setSelectedCategory(category);
     setSelectedSubcategory(subcategory);
     setFormData({
@@ -425,10 +460,6 @@ function Categories() {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-
-  const filteredCategories = categories.filter(category =>
-    category.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   return (
     <Box>
@@ -457,7 +488,7 @@ function Categories() {
           variant="outlined"
           placeholder="Qidirish..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => handleSearch(e.target.value)}
           sx={{ mb: 3 }}
           InputProps={{
             startAdornment: (
@@ -479,7 +510,7 @@ function Categories() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredCategories
+              {(filteredCategories.length > 0 ? filteredCategories : [])
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((category) => (
                   <TableRow key={`category-${category._id}`}>
@@ -509,15 +540,19 @@ function Categories() {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      {/* Yangilash tugmasi vaqtincha o'chirildi
-                      <IconButton
-                        edge="end"
-                        aria-label="edit"
-                        onClick={() => handleEdit(category)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      */}
+                      <Tooltip title="Tahrirlash">
+                        <IconButton
+                          edge="end"
+                          aria-label="edit"
+                          onClick={() => handleEdit(category)}
+                          sx={{ 
+                            color: 'primary.main',
+                            '&:hover': { bgcolor: 'primary.lighter' }
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Tooltip>
                       <Tooltip title="O'chirish">
                         <IconButton 
                           onClick={() => handleDeleteClick(category)}
